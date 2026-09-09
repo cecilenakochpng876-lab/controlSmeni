@@ -1,0 +1,9 @@
+{
+  "name": "controlsmeni",
+  "main": "worker.js",
+  "compatibility_date": "2026-09-09",
+  "assets": { "directory": "./public" },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "control-smeni-db", "database_id": "be930750-3f9d-43b1-8810-b9a6216649db" }
+  ]
+}
