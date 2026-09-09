@@ -523,6 +523,7 @@ export default {
           return J(await sa(env));
         }
 
+        /* НАСТРОЙКА ДЛИТЕЛЬНОСТИ СМЕНЫ */
         if (
           p === "/api/admin/settings" &&
           req.method === "POST"
@@ -547,6 +548,74 @@ export default {
           return J(await sa(env));
         }
 
+        /*
+          СБРОС СМЕНЫ ОТДЕЛЬНОГО РАБОТНИКА
+
+          workerId:
+          0 = Ker
+          1 = Sanyo
+
+          История events НЕ удаляется.
+        */
+        if (
+          p === "/api/admin/reset-worker" &&
+          req.method === "POST"
+        ) {
+          const { workerId } = await req.json();
+          const id = Number(workerId);
+
+          if (![0, 1].includes(id)) {
+            return J(
+              { error: "Неверный работник" },
+              400
+            );
+          }
+
+          const w = await one(
+            env,
+            "SELECT name FROM workers WHERE id=?",
+            [id]
+          );
+
+          if (!w) {
+            return J(
+              { error: "Работник не найден" },
+              404
+            );
+          }
+
+          await q(
+            env,
+            `UPDATE workers
+             SET startedAt=NULL,
+                 endedAt=NULL,
+                 mealStarted=NULL,
+                 mealFinished=0,
+                 mealAck=0,
+                 restRemaining=?,
+                 restRunning=0,
+                 restLast=NULL,
+                 notice=NULL,
+                 noticeAt=NULL,
+                 noticeRead=0
+             WHERE id=?`,
+            [BREAK, id]
+          );
+
+          await log(
+            env,
+            id,
+            "Администратор сбросил текущую смену"
+          );
+
+          return J({
+            ok: true,
+            workerId: id,
+            worker: w.name
+          });
+        }
+
+        /* УВЕДОМЛЕНИЯ */
         if (
           p === "/api/admin/notify" &&
           req.method === "POST"
@@ -603,7 +672,9 @@ export default {
 
     } catch (e) {
       return J(
-        { error: e.message },
+        {
+          error: e?.message || String(e)
+        },
         500
       );
     }
