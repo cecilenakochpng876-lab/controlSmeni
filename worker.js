@@ -33,17 +33,15 @@ async function all(env, sql, args = []) {
 }
 
 async function init(env) {
-  await q(
-    env,
-    `CREATE TABLE IF NOT EXISTS settings(
+  await q(env, `
+    CREATE TABLE IF NOT EXISTS settings(
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
-    )`
-  );
+    )
+  `);
 
-  await q(
-    env,
-    `CREATE TABLE IF NOT EXISTS workers(
+  await q(env, `
+    CREATE TABLE IF NOT EXISTS workers(
       id INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
       startedAt INTEGER,
@@ -57,31 +55,29 @@ async function init(env) {
       notice TEXT,
       noticeAt INTEGER,
       noticeRead INTEGER DEFAULT 0
-    )`
-  );
+    )
+  `);
 
-  await q(
-    env,
-    `CREATE TABLE IF NOT EXISTS events(
+  await q(env, `
+    CREATE TABLE IF NOT EXISTS events(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       workerId INTEGER,
       at INTEGER,
       text TEXT
-    )`
-  );
+    )
+  `);
 
-  await q(
-    env,
-    `CREATE TABLE IF NOT EXISTS sessions(
+  await q(env, `
+    CREATE TABLE IF NOT EXISTS sessions(
       token TEXT PRIMARY KEY,
       userId INTEGER,
       role TEXT,
       expiresAt INTEGER
-    )`
-  );
+    )
+  `);
 
   for (const [id, name] of [[0, "Ker"], [1, "Sanyo"]]) {
-    if (!await one(env, "SELECT id FROM workers WHERE id = ?", [id])) {
+    if (!await one(env, "SELECT id FROM workers WHERE id=?", [id])) {
       await q(
         env,
         "INSERT INTO workers(id,name,restRemaining) VALUES(?,?,?)",
@@ -92,7 +88,7 @@ async function init(env) {
 
   if (!await one(
     env,
-    "SELECT value FROM settings WHERE key = 'shiftHours'"
+    "SELECT value FROM settings WHERE key='shiftHours'"
   )) {
     await q(
       env,
@@ -102,21 +98,18 @@ async function init(env) {
 }
 
 const ck = req =>
-  req.headers
-    .get("Cookie")
-    ?.match(/sc_session=([^;]+)/)
-    ?.[1];
+  req.headers.get("Cookie")?.match(/sc_session=([^;]+)/)?.[1];
 
 async function sess(req, env) {
-  const token = ck(req);
+  const t = ck(req);
 
-  return token
-    ? await one(
-        env,
-        "SELECT userId,role FROM sessions WHERE token=? AND expiresAt>?",
-        [token, Date.now()]
-      )
-    : null;
+  if (!t) return null;
+
+  return await one(
+    env,
+    "SELECT userId,role FROM sessions WHERE token=? AND expiresAt>?",
+    [t, Date.now()]
+  );
 }
 
 async function log(env, id, text) {
@@ -133,7 +126,7 @@ async function settings(env) {
     "SELECT value FROM settings WHERE key='shiftHours'"
   );
 
-  return Number(row?.value ?? 8);
+  return Number(row?.value || 8);
 }
 
 async function sw(env, id) {
@@ -142,6 +135,10 @@ async function sw(env, id) {
     "SELECT * FROM workers WHERE id=?",
     [id]
   );
+
+  if (!s) {
+    throw new Error("Работник не найден");
+  }
 
   const e = await all(
     env,
@@ -200,16 +197,13 @@ async function sa(env) {
 }
 
 const J = (x, status = 200, h = {}) =>
-  new Response(
-    JSON.stringify(x),
-    {
-      status,
-      headers: {
-        "Content-Type": "application/json",
-        ...h
-      }
+  new Response(JSON.stringify(x), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      ...h
     }
-  );
+  });
 
 export default {
   async fetch(req, env) {
@@ -222,8 +216,10 @@ export default {
         return env.ASSETS.fetch(req);
       }
 
+      /* LOGIN */
       if (p === "/api/login" && req.method === "POST") {
         const { login, password } = await req.json();
+
         const u = USERS[login];
 
         if (!u || u.password !== password) {
@@ -243,11 +239,6 @@ export default {
           ]
         );
 
-        const state =
-          u.role === "admin"
-            ? await sa(env)
-            : await sw(env, u.id);
-
         return J(
           {
             user: {
@@ -255,7 +246,10 @@ export default {
               role: u.role,
               id: u.id
             },
-            state
+            state:
+              u.role === "admin"
+                ? await sa(env)
+                : await sw(env, u.id)
           },
           200,
           {
@@ -265,12 +259,14 @@ export default {
         );
       }
 
+      /* SESSION */
       const s = await sess(req, env);
 
       if (!s) {
         return J({ error: "unauthorized" }, 401);
       }
 
+      /* LOGOUT */
       if (p === "/api/logout") {
         await q(
           env,
@@ -288,6 +284,7 @@ export default {
         );
       }
 
+      /* WORKER */
       if (s.role === "worker") {
         const id = s.userId;
 
@@ -324,7 +321,11 @@ export default {
             [Date.now(), BREAK, id]
           );
 
-          await log(env, id, "Смена начата");
+          await log(
+            env,
+            id,
+            "Смена начата"
+          );
 
           return J(await sw(env, id));
         }
@@ -338,12 +339,14 @@ export default {
             [id]
           );
 
-          const rem = w.restRunning
-            ? Math.max(
-                0,
-                w.restRemaining - (now - w.restLast)
-              )
-            : w.restRemaining;
+          let rem = w.restRemaining;
+
+          if (w.restRunning) {
+            rem = Math.max(
+              0,
+              w.restRemaining - (now - w.restLast)
+            );
+          }
 
           await q(
             env,
@@ -356,7 +359,11 @@ export default {
             [now, rem, id]
           );
 
-          await log(env, id, "Смена завершена");
+          await log(
+            env,
+            id,
+            "Смена завершена"
+          );
 
           return J(await sw(env, id));
         }
@@ -503,14 +510,14 @@ export default {
           return J(await sw(env, id));
         }
 
-      } else {
+        return J(
+          { error: "not found" },
+          404
+        );
+      }
 
-        if (s.role !== "admin") {
-          return J(
-            { error: "forbidden" },
-            403
-          );
-        }
+      /* ADMIN */
+      if (s.role === "admin") {
 
         if (p === "/api/admin/state") {
           return J(await sa(env));
@@ -582,18 +589,21 @@ export default {
 
           return J({ ok: true });
         }
+
+        return J(
+          { error: "not found" },
+          404
+        );
       }
 
       return J(
-        { error: "not found" },
-        404
+        { error: "forbidden" },
+        403
       );
 
     } catch (e) {
       return J(
-        {
-          error: e?.message || String(e)
-        },
+        { error: e.message },
         500
       );
     }
