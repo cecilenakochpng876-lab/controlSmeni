@@ -253,24 +253,22 @@ async function requestFullScreenShare() {
 
     return true;
 
-  } catch (err) {
+    } catch (err) {
 
-    if (err.name === "NotAllowedError") {
+    console.error(
+      "Ошибка демонстрации экрана:",
+      err.name,
+      err.message
+    );
 
-      toast(
-        "Демонстрация экрана отменена. Смена не начата."
-      );
-
-    } else {
-
-      toast(
-        "Не удалось начать демонстрацию экрана."
-      );
-    }
+    toast(
+      "Ошибка демонстрации экрана: " +
+      err.name +
+      (err.message ? " — " + err.message : "")
+    );
 
     return false;
   }
-}
 
 
 function stopScreenShare() {
