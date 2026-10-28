@@ -273,6 +273,17 @@ async function requestFullScreenShare() {
 }
 
 
+function stopScreenShare() {
+  const stream = screenStream;
+  screenStream = null;
+
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+  }
+}
+
+
+
 /* =========================
    START SHIFT
 ========================= */
@@ -346,24 +357,51 @@ $("#restPause").onclick =
   () => action("/worker/rest-pause");
 
 
+
 async function action(path) {
+  const isResumeAction =
+    path === "/worker/back" ||
+    path === "/worker/rest-pause";
+
+  const isBreakStartAction =
+    path === "/worker/meal" ||
+    path === "/worker/rest-start";
+
+  let startedShareForResume = false;
 
   try {
+    // Перед возвращением заново запрашиваем весь экран.
+    if (isResumeAction) {
+      const approved = await requestFullScreenShare();
 
-    state =
-      await api(path, {
-        method: "POST"
-      });
+      if (!approved) return;
+
+      startedShareForResume = true;
+    }
+
+    state = await api(path, {
+      method: "POST"
+    });
+
+    // Останавливаем демонстрацию после успешного начала перерыва.
+    if (isBreakStartAction) {
+      stopScreenShare();
+    }
 
     render();
-
     toast("Готово");
 
   } catch (e) {
+    // Если сервер не подтвердил возвращение,
+    // останавливаем только что запущенную демонстрацию.
+    if (startedShareForResume) {
+      stopScreenShare();
+    }
 
     toast(e.message);
   }
 }
+
 
 
 /* =========================
