@@ -647,17 +647,23 @@ function renderWorker() {
     !!s.meal?.finished
   );
 
+  
+  const mealExpired =
+    !!s.meal &&
+    (t - s.meal.startedAt >= BREAK);
+
   $("#backBtn").classList.toggle(
     "hidden",
-    !s.meal?.finished ||
+    !(s.meal?.finished || mealExpired) ||
     s.meal.ack
   );
 
   $("#mealNotice").classList.toggle(
     "hidden",
-    !s.meal?.finished ||
+    !(s.meal?.finished || mealExpired) ||
     s.meal.ack
   );
+
 
   $("#mealNotice").textContent =
     "Обед завершён — подтвердите возвращение.";
