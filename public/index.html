@@ -1,4 +1,70 @@
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ShiftControl</title><link rel="stylesheet" href="/style.css"></head><body><div class="app"><header class="topbar"><div class="brand"><div class="logo">SC</div><div><b>ShiftControl</b><small>Контроль рабочих смен</small></div></div><div id="clock"></div></header>
-<main id="loginScreen" class="login"><div class="login-box"><div class="logo big">SC</div><h1>Вход в систему</h1><p>Введите логин и пароль</p><form id="loginForm"><input id="login" autocomplete="username" placeholder="Логин" required><input id="password" type="password" autocomplete="current-password" placeholder="Пароль" required><button class="primary wide">Войти</button></form><div id="loginError" class="error hidden"></div></div></main>
-<main id="workerView" class="view hidden"><div class="view-head"><div><span class="eyebrow">ЛИЧНЫЙ КАБИНЕТ</span><h1 id="workerName"></h1><p>Отображаются только ваши данные.</p></div><button class="ghost logout">Выйти</button></div><div id="workerNotice" class="admin-notice hidden"></div><div class="worker-card"><div class="status-row"><span id="workerStatus" class="status">Не начал</span><span id="workerDate"></span></div><div class="shift-time" id="shiftTime">00:00:00</div><div class="progress"><i id="shiftProgress"></i></div><div class="actions"><button id="startShift" class="primary">▶ Начать смену</button><button id="endShift" class="danger" disabled>■ Закончить смену</button></div><div class="breaks"><div class="break meal"><h3>🍽️ Обеденный перерыв <span>50 МИН</span></h3><p>Запускается один раз и не останавливается.</p><div class="timer" id="mealTime">50:00</div><button id="mealBtn" disabled>Взять обед</button><button id="backBtn" class="back hidden">✓ Я тут</button><div id="mealNotice" class="notice hidden"></div></div><div class="break rest"><h3>☕ Дневной отдых <span>50 МИН</span></h3><p>Можно ставить на паузу. Всего доступно 50 минут.</p><div class="timer" id="restTime">50:00</div><button id="restStart" disabled>▶ Запустить отдых</button><button id="restPause" disabled>Ⅱ Пауза</button></div></div></div><div class="panel"><h2>Мои события</h2><div id="myEvents"></div></div></main>
-<main id="adminView" class="view hidden"><div class="view-head"><div><span class="eyebrow">ADMIN CONTROL</span><h1>Панель администратора</h1><p>Управление сменами, уведомлениями и настройками.</p></div><button class="ghost logout">Выйти</button></div><div class="stats"><div><small>Активны</small><b id="statActive">0</b></div><div><small>На обеде</small><b id="statMeal">0</b></div><div><small>На отдыхе</small><b id="statRest">0</b></div><div><small>Завершили</small><b id="statDone">0</b></div></div><div id="adminWorkers" class="admin-grid"></div><div class="admin-bottom"><section class="panel"><h2>Настройки смены</h2><p class="muted">Изменение длительности применяется к следующим сменам.</p><label>Длительность смены, часов<input id="shiftHours" type="number" min="1" max="24" step="0.5"></label><button id="saveSettings" class="primary wide">Сохранить настройки</button></section><section class="panel"><h2>Уведомление</h2><p class="muted">Отправьте сообщение одному работнику или обоим.</p><select id="notifyWorker"><option value="all">Все работники</option><option value="0">Ker</option><option value="1">Sanyo</option></select><textarea id="notifyText" placeholder="Текст уведомления..."></textarea><button id="sendNotify" class="primary wide">🔔 Отправить</button></section><section class="panel full"><h2>Лента действий</h2><div id="allEvents"></div></section></div></main></div><script src="/script.js"></script></body></html>
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#091321">
+  <title>ShiftControl — Контроль рабочих смен</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/script.js" defer></script>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand"><div class="logo" aria-hidden="true">SC</div><div><strong>ShiftControl</strong><small>Контроль рабочих смен</small></div></div>
+      <div class="top-right"><span id="connection" class="connection hidden" role="status"></span><span id="clock" aria-label="Текущее время">--:--:--</span></div>
+    </header>
+
+    <main id="loginScreen" class="login">
+      <div class="login-box">
+        <div class="logo big" aria-hidden="true">SC</div>
+        <h1>Вход в систему</h1><p>Введите логин и пароль, чтобы продолжить</p>
+        <form id="loginForm">
+          <label for="login">Логин</label><input id="login" autocomplete="username" required maxlength="100" placeholder="Логин">
+          <label for="password">Пароль</label><input id="password" type="password" autocomplete="current-password" required placeholder="Пароль">
+          <button id="loginButton" class="primary wide" type="submit">Войти</button>
+        </form>
+        <p id="loginError" class="error hidden" role="alert"></p>
+      </div>
+    </main>
+
+    <main id="workerView" class="view hidden">
+      <div class="view-head"><div><span class="eyebrow">ЛИЧНЫЙ КАБИНЕТ</span><h1 id="workerName">Работник</h1><p>Ваши смены, обед и Daily Rest</p></div><button class="ghost logout" type="button">Выйти</button></div>
+      <section id="workerNotice" class="admin-notice hidden" aria-live="polite"><div><span class="label">УВЕДОМЛЕНИЕ ОТ АДМИНИСТРАТОРА</span><p id="workerNoticeText"></p><small id="workerNoticeAt"></small></div><button id="markNotice" class="ghost" type="button">Прочитано</button></section>
+      <section class="worker-card">
+        <div class="status-row"><span id="workerStatus" class="status">Не начал смену</span><span id="workerDate"></span></div>
+        <div class="shift-time" id="shiftTime">00:00:00</div>
+        <div class="shift-meta"><div>Начало: <strong id="shiftStartedAt">—</strong></div><div>План: <strong id="shiftPlanned">8 ч</strong></div><div>Осталось: <strong id="shiftRemaining">08:00:00</strong></div></div>
+        <div class="progress" role="progressbar" aria-label="Прогресс рабочей смены" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progressTrack"><i id="shiftProgress"></i></div>
+        <div class="actions"><button id="startShift" class="primary" type="button">▶ Начать смену</button><button id="endShift" class="danger" type="button" disabled>■ Завершить смену</button></div>
+        <div class="breaks">
+          <div class="break meal"><div class="break-title"><h2>🍽️ Обед</h2><span class="limit">50 МИНУТ</span></div><p>Один раз за смену, без паузы. Возвращение подтверждается вручную.</p><div id="mealTime" class="timer">50:00</div><div id="mealState" class="break-state">Не начат</div><button id="mealBtn" type="button" disabled>Начать обед</button><button id="backBtn" class="back hidden" type="button">✓ Я тут</button><div id="mealNotice" class="notice hidden" role="status">Обед завершён — подтвердите возвращение.</div></div>
+          <div class="break rest"><div class="break-title"><h2>☕ Daily Rest</h2><span class="limit">50 МИНУТ</span></div><p>Отдельный лимит за смену: можно приостановить и продолжить.</p><div id="restTime" class="timer">50:00</div><div id="restState" class="break-state">Доступно 50 минут</div><button id="restStart" type="button" disabled>▶ Начать перерыв</button><button id="restPause" type="button" disabled class="hidden">Ⅱ Пауза</button></div>
+        </div>
+      </section>
+      <section class="panel"><div class="section-head"><h2>Мои события</h2><span class="muted">Последние действия</span></div><div id="myEvents" class="events"></div></section>
+    </main>
+
+    <main id="adminView" class="view hidden">
+      <div class="view-head"><div><span class="eyebrow">ADMIN CONTROL</span><h1>Панель администратора</h1><p>Текущий статус сотрудников и управление сменами</p></div><button class="ghost logout" type="button">Выйти</button></div>
+      <section class="stats" aria-label="Общая статистика">
+        <div><small>Активны</small><b id="statActive">0</b></div>
+        <div><small>На обеде</small><b id="statMeal">0</b></div>
+        <div><small>На перерыве</small><b id="statRest">0</b></div>
+        <div><small>Завершили</small><b id="statDone">0</b></div>
+      </section>
+      <section id="adminWorkers" class="admin-grid" aria-label="Работники"></section>
+      <div class="admin-bottom">
+        <section class="panel"><h2>Настройки смены</h2><p class="muted">Изменение применяется только к новым сменам.</p><label for="shiftHours">Продолжительность, часов</label><input id="shiftHours" type="number" min="1" max="24" step="0.5" inputmode="decimal"><button id="saveSettings" class="primary wide" type="button">Сохранить настройки</button></section>
+        <section class="panel"><h2>Уведомления</h2><p class="muted">Отправьте сообщение одному или обоим сотрудникам.</p><label for="notifyWorker">Получатель</label><select id="notifyWorker"><option value="all">Все работники</option><option value="0">Ker</option><option value="1">Sanyo</option></select><label for="notifyText">Текст сообщения</label><textarea id="notifyText" maxlength="2000" placeholder="Введите текст уведомления..."></textarea><button id="sendNotify" class="primary wide" type="button">Отправить</button></section>
+        <section class="panel full"><div class="section-head"><h2>История событий</h2><span class="muted">Действия работников и администратора</span></div><div id="allEvents" class="events"></div></section>
+      </div>
+    </main>
+  </div>
+
+  <div id="screenGate" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="screenTitle">
+    <section class="gate-card"><div class="gate-icon" aria-hidden="true">▣</div><h2 id="screenTitle">Требуется демонстрация экрана</h2><p>Для продолжения активной смены разрешите браузеру доступ к <strong>всему монитору</strong>. Вкладка или окно не подойдут.</p><p class="muted fine">Таймеры продолжают идти на сервере. Видеопоток остаётся в браузере и не передаётся администратору.</p><p id="screenError" class="error hidden" role="alert"></p><button id="resumeScreen" class="primary wide" type="button">Выбрать весь экран / монитор</button><button id="gateLogout" class="ghost wide" type="button">Выйти из аккаунта</button></section>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
