@@ -56,111 +56,27 @@ function fmt(ms, short = false) {
    TOAST
 ========================= */
 
-function toast(x) {
-  let e =
-    document.querySelector(".toast") ||
-    Object.assign(
-      document.body.appendChild(document.createElement("div")),
-      { className: "toast" }
-    );
+function toast(msg) {
+  const el = $("#toast");
 
-  e.textContent = x;
-  e.classList.add("show");
+  if (!el) {
+    alert(msg);
+    return;
+  }
+
+  el.textContent = msg;
+  el.classList.remove("hidden");
 
   clearTimeout(toastTimer);
 
-  toastTimer = setTimeout(
-    () => e.classList.remove("show"),
-    2800
-  );
+  toastTimer = setTimeout(() => {
+    el.classList.add("hidden");
+  }, 3500);
 }
 
 
 /* =========================
-   SCREENS
-========================= */
-
-function show(v) {
-  ["loginScreen", "workerView", "adminView"].forEach(x => {
-    if ($("#" + x)) {
-      $("#" + x).classList.add("hidden");
-    }
-  });
-
-  if ($("#" + v)) {
-    $("#" + v).classList.remove("hidden");
-  }
-}
-
-
-/* =========================
-   LOGIN
-========================= */
-
-$("#loginForm").onsubmit = async e => {
-  e.preventDefault();
-
-  $("#loginError").classList.add("hidden");
-
-  try {
-    const d = await api("/login", {
-      method: "POST",
-      body: JSON.stringify({
-        login: $("#login").value.trim(),
-        password: $("#password").value
-      })
-    });
-
-    me = d.user;
-    state = d.state;
-
-    show(
-      me.role === "admin"
-        ? "adminView"
-        : "workerView"
-    );
-
-    render();
-
-  } catch (err) {
-    $("#loginError").textContent =
-      err.message || "Неверный логин или пароль";
-
-    $("#loginError").classList.remove("hidden");
-  }
-};
-
-
-/* =========================
-   LOGOUT
-========================= */
-
-$$(".logout").forEach(b => {
-  b.onclick = async () => {
-
-    try {
-
-      if (screenStream) {
-        screenStream
-          .getTracks()
-          .forEach(t => t.stop());
-
-        screenStream = null;
-      }
-
-      await api("/logout", {
-        method: "POST"
-      });
-
-    } catch {}
-
-    location.reload();
-  };
-});
-
-
-/* =========================
-   FULL SCREEN SHARE
+   SCREEN SHARE
 ========================= */
 
 async function requestFullScreenShare() {
@@ -253,7 +169,7 @@ async function requestFullScreenShare() {
 
     return true;
 
-    } catch (err) {
+  } catch (err) {
 
     console.error(
       "Ошибка демонстрации экрана:",
@@ -269,7 +185,7 @@ async function requestFullScreenShare() {
 
     return false;
   }
-
+}
 
 function stopScreenShare() {
   const stream = screenStream;
@@ -336,25 +252,64 @@ $("#startShift").onclick = async () => {
 
 
 /* =========================
-   WORKER ACTIONS
+   LOGIN
 ========================= */
 
-$("#endShift").onclick =
-  () => action("/worker/end");
+$("#loginForm").onsubmit = async e => {
+  e.preventDefault();
 
-$("#mealBtn").onclick =
-  () => action("/worker/meal");
+  const login = $("#login").value.trim();
+  const password = $("#password").value;
 
-$("#backBtn").onclick =
-  () => action("/worker/back");
+  try {
+    const d = await api("/login", {
+      method: "POST",
+      body: JSON.stringify({
+        login,
+        password
+      })
+    });
 
-$("#restStart").onclick =
-  () => action("/worker/rest-start");
+    me = d.user;
+    state = d.state;
 
-$("#restPause").onclick =
-  () => action("/worker/rest-pause");
+    $("#loginPage").classList.add("hidden");
+    $("#app").classList.remove("hidden");
+
+    render();
+
+  } catch (e) {
+    $("#loginError").textContent = e.message;
+  }
+};
 
 
+/* =========================
+   LOGOUT
+========================= */
+
+$("#logout").onclick = async () => {
+  try {
+    await api("/logout", {
+      method: "POST"
+    });
+  } catch (e) {
+    console.error(e);
+  }
+
+  stopScreenShare();
+
+  me = null;
+  state = null;
+
+  $("#app").classList.add("hidden");
+  $("#loginPage").classList.remove("hidden");
+};
+
+
+/* =========================
+   ACTION
+========================= */
 
 async function action(path) {
   const isResumeAction =
@@ -368,186 +323,23 @@ async function action(path) {
   let startedShareForResume = false;
 
   try {
-    // Перед возвращением заново запрашиваем весь экран.
     if (isResumeAction) {
       const approved = await requestFullScreenShare();
-
       if (!approved) return;
-
       startedShareForResume = true;
     }
 
-    state = await api(path, {
-      method: "POST"
-    });
+    state = await api(path, { method: "POST" });
 
-    // Останавливаем демонстрацию после успешного начала перерыва.
     if (isBreakStartAction) {
       stopScreenShare();
     }
 
     render();
     toast("Готово");
-
   } catch (e) {
-    // Если сервер не подтвердил возвращение,
-    // останавливаем только что запущенную демонстрацию.
-    if (startedShareForResume) {
-      stopScreenShare();
-    }
-
+    if (startedShareForResume) stopScreenShare();
     toast(e.message);
-  }
-}
-
-
-
-/* =========================
-   ADMIN NOTIFICATION
-========================= */
-
-$("#sendNotify").onclick = async () => {
-
-  const text =
-    $("#notifyText").value.trim();
-
-  if (!text) {
-    return toast("Введите сообщение");
-  }
-
-  try {
-
-    await api("/admin/notify", {
-      method: "POST",
-      body: JSON.stringify({
-        target: $("#notifyWorker").value,
-        text
-      })
-    });
-
-    $("#notifyText").value = "";
-
-    toast("Уведомление отправлено");
-
-    render();
-
-  } catch (e) {
-
-    toast(e.message);
-  }
-};
-
-
-/* =========================
-   ADMIN SETTINGS
-========================= */
-
-$("#saveSettings").onclick = async () => {
-
-  const hours =
-    Number($("#shiftHours").value);
-
-  try {
-
-    state =
-      await api("/admin/settings", {
-        method: "POST",
-        body: JSON.stringify({
-          shiftHours: hours
-        })
-      });
-
-    toast("Настройки сохранены");
-
-    render();
-
-  } catch (e) {
-
-    toast(e.message);
-  }
-};
-
-
-/* =========================
-   RESET WORKER
-========================= */
-
-async function resetWorker(workerId, workerName) {
-
-  const ok = confirm(
-    `Сбросить текущую смену работника ${workerName}?\n\n` +
-    `Будут сброшены:\n` +
-    `• текущая смена\n` +
-    `• время обеда\n` +
-    `• время дневного отдыха\n\n` +
-    `История событий сохранится.`
-  );
-
-  if (!ok) {
-    return;
-  }
-
-  try {
-
-    await api("/admin/reset-worker", {
-      method: "POST",
-      body: JSON.stringify({
-        workerId
-      })
-    });
-
-    toast(
-      `Смена ${workerName} сброшена`
-    );
-
-    await refresh();
-
-  } catch (e) {
-
-    toast(e.message);
-  }
-}
-
-
-/* =========================
-   REFRESH
-========================= */
-
-async function refresh() {
-
-  if (!me) {
-    return;
-  }
-
-  try {
-
-    state =
-      await api(
-        me.role === "admin"
-          ? "/admin/state"
-          : "/worker/state"
-      );
-
-    render();
-
-  } catch {}
-}
-
-
-/* =========================
-   RENDER
-========================= */
-
-function render() {
-
-  if (!me) {
-    return;
-  }
-
-  if (me.role === "admin") {
-    renderAdmin();
-  } else {
-    renderWorker();
   }
 }
 
@@ -557,95 +349,47 @@ function render() {
 ========================= */
 
 function renderWorker() {
-
   const s = state;
   const t = Date.now();
 
-  const shift =
-    s.startedAt
-      ? ((s.endedAt || t) - s.startedAt)
-      : 0;
+  $("#workerName").textContent = me.name;
 
-  $("#workerName").textContent =
-    me.name;
+  $("#workerPage").classList.remove("hidden");
+  $("#adminPage").classList.add("hidden");
 
-  $("#workerDate").textContent =
-    new Date().toLocaleDateString("ru-RU");
+  $("#startShift").classList.toggle(
+    "hidden",
+    !!s.startedAt
+  );
 
-  $("#shiftTime").textContent =
-    fmt(shift);
+  $("#endShift").classList.toggle(
+    "hidden",
+    !s.startedAt || !!s.endedAt
+  );
 
-  $("#shiftProgress").style.width =
-    Math.min(
-      100,
-      shift /
-      (state.shiftHours * 3600000) *
-      100
-    ) + "%";
-
-
-  /* STATUS */
-
-  const st =
-    $("#workerStatus");
-
-  st.className =
-    "status " +
-    (
-      s.endedAt
-        ? "done"
-        : s.restRunning
-          ? "pause"
-          : s.startedAt
-            ? "on"
-            : ""
-    );
-
-  st.textContent =
+  $("#shiftStatus").textContent =
     s.endedAt
-      ? "Завершена"
-      : s.restRunning
-        ? "На отдыхе"
-        : s.startedAt
-          ? "Смена идет"
-          : "Не начал";
+      ? "Смена завершена"
+      : s.startedAt
+        ? "Смена идёт"
+        : "Смена не начата";
 
-
-  /* SHIFT BUTTONS */
-
-  $("#startShift").disabled =
-    !!s.startedAt;
-
-  $("#endShift").disabled =
-    !s.startedAt ||
-    !!s.endedAt;
-
-
-  /* MEAL */
-
-  $("#mealBtn").disabled =
-    !s.startedAt ||
-    !!s.endedAt ||
-    !!s.meal;
+  if (s.startedAt && !s.endedAt) {
+    $("#shiftTime").textContent =
+      fmt(t - s.startedAt);
+  } else {
+    $("#shiftTime").textContent = "00:00:00";
+  }
 
   const ml =
     s.meal
-      ? Math.max(
-          0,
-          BREAK -
-          (t - s.meal.startedAt)
-        )
+      ? Math.max(0, BREAK - (t - s.meal.startedAt))
       : BREAK;
 
-  $("#mealTime").textContent =
-    fmt(ml, true);
+  $("#mealTime").textContent = fmt(ml, true);
 
-  $("#mealBtn").classList.toggle(
-    "hidden",
-    !!s.meal?.finished
-  );
+  $("#mealBtn").classList.toggle("hidden", !!s.meal?.finished);
 
-  
   const mealExpired =
     !!s.meal &&
     (t - s.meal.startedAt >= BREAK);
@@ -662,67 +406,43 @@ function renderWorker() {
     s.meal.ack
   );
 
-
   $("#mealNotice").textContent =
     "Обед завершён — подтвердите возвращение.";
 
-
-  /* REST */
-
-  const r =
-    Math.max(
-      0,
-      s.restRemaining -
-      (
-        s.restRunning &&
-        s.restLast
-          ? t - s.restLast
-          : 0
-      )
-    );
-
   $("#restTime").textContent =
-    fmt(r, true);
+    fmt(s.restRemaining || 0, true);
+
+  $("#restStart").classList.toggle(
+    "hidden",
+    !!s.restRunning ||
+    !s.startedAt ||
+    !!s.endedAt ||
+    (s.restRemaining || 0) <= 0
+  );
+
+  $("#restPause").classList.toggle(
+    "hidden",
+    !s.restRunning
+  );
+
+  $("#restStatus").textContent =
+    s.restRunning
+      ? "Перерыв идёт"
+      : "Перерыв остановлен";
+
+  $("#mealBtn").disabled =
+    !s.startedAt ||
+    !!s.endedAt ||
+    !!s.meal;
 
   $("#restStart").disabled =
     !s.startedAt ||
     !!s.endedAt ||
-    s.restRunning ||
-    r <= 0;
+    (s.restRemaining || 0) <= 0;
 
-  $("#restPause").disabled =
-    !s.restRunning;
-
-
-  /* EVENTS */
-
-  $("#myEvents").innerHTML =
-    (s.events || [])
-      .slice(0, 30)
-      .map(e =>
-        `<div class="event">
-          <time>
-            ${new Date(e.at).toLocaleTimeString("ru-RU")}
-          </time>
-          ${e.text}
-        </div>`
-      )
-      .join("")
-    ||
-    "<div class='muted'>Событий пока нет.</div>";
-
-
-  /* NOTICE */
-
-  if (s.notice) {
-
-    $("#workerNotice").textContent =
-      "🔔 " + s.notice.text;
-
-    $("#workerNotice")
-      .classList
-      .remove("hidden");
-  }
+  $("#endShift").disabled =
+    !s.startedAt ||
+    !!s.endedAt;
 }
 
 
@@ -731,245 +451,215 @@ function renderWorker() {
 ========================= */
 
 function renderAdmin() {
+  $("#workerPage").classList.add("hidden");
+  $("#adminPage").classList.remove("hidden");
 
-  const ws = state.workers;
+  $("#adminName").textContent = me.name;
 
-  let active = 0;
-  let meal = 0;
-  let rest = 0;
-  let done = 0;
-
-  $("#shiftHours").value =
-    state.shiftHours;
-
-
-  $("#adminWorkers").innerHTML =
-    ws.map(s => {
-
-      const t = Date.now();
-
-      const shift =
-        s.startedAt
-          ? ((s.endedAt || t) - s.startedAt)
-          : 0;
-
-      if (s.startedAt && !s.endedAt) {
-        active++;
-      }
-
-      if (s.meal && !s.meal.finished) {
-        meal++;
-      }
-
-      if (s.restRunning) {
-        rest++;
-      }
-
-      if (s.endedAt) {
-        done++;
-      }
-
-
-      const r =
-        Math.max(
-          0,
-          s.restRemaining -
-          (
-            s.restRunning &&
-            s.restLast
-              ? t - s.restLast
-              : 0
-          )
-        );
-
-
-      return `
-        <div class="admin-worker">
-
-          <div class="aw-head">
-
-            <b>${s.name}</b>
-
-            <span class="status ${
-              s.endedAt
-                ? "done"
-                : s.restRunning
-                  ? "pause"
-                  : s.startedAt
-                    ? "on"
-                    : ""
-            }">
-
-              ${
-                s.endedAt
-                  ? "Завершена"
-                  : s.restRunning
-                    ? "На отдыхе"
-                    : s.startedAt
-                      ? "Смена идет"
-                      : "Не начал"
-              }
-
-            </span>
-
-          </div>
-
-
-          <div class="aw-time">
-            ${fmt(shift)}
-          </div>
-
-
-          <div class="mini">
-
-            <div>
-
-              <small>
-                🍽️ Обед
-              </small>
-
-              <b>
-
-                ${
-                  s.meal
-                    ? (
-                        s.meal.finished
-                          ? (
-                              s.meal.ack
-                                ? "Я тут ✓"
-                                : "Закончен"
-                            )
-                          : "Идёт"
-                      )
-                    : "Не брал"
-                }
-
-              </b>
-
-            </div>
-
-
-            <div>
-
-              <small>
-                ☕ Отдых
-              </small>
-
-              <b>
-                ${fmt(r, true)}
-              </b>
-
-            </div>
-
-          </div>
-
-
-          <!-- RESET -->
-
-          <button
-            class="reset-worker-btn"
-            data-worker-id="${s.id}"
-            data-worker-name="${s.name}"
-            type="button"
-          >
-            🔄 Сбросить смену
-          </button>
-
-        </div>
-      `;
-
-    }).join("");
-
-
-  /* RESET BUTTONS */
-
-  $$(".reset-worker-btn")
-    .forEach(btn => {
-
-      btn.onclick = () => {
-
-        const id =
-          Number(btn.dataset.workerId);
-
-        const name =
-          btn.dataset.workerName;
-
-        resetWorker(id, name);
-      };
-
-    });
-
-
-  /* STATS */
+  const workers = state.workers || [];
 
   $("#statActive").textContent =
-    active;
+    workers.filter(w => w.status === "active").length;
 
   $("#statMeal").textContent =
-    meal;
+    workers.filter(w => w.status === "meal").length;
 
   $("#statRest").textContent =
-    rest;
+    workers.filter(w => w.status === "rest").length;
 
   $("#statDone").textContent =
-    done;
-
-
-  /* EVENTS */
-
-  let ev = [];
-
-  ws.forEach(s => {
-
-    (s.events || []).forEach(e => {
-
-      ev.push({
-        ...e,
-        name: s.name
-      });
-
-    });
-
-  });
-
-
-  ev.sort(
-    (a, b) => b.at - a.at
-  );
-
+    workers.filter(w => w.status === "done").length;
 
   $("#allEvents").innerHTML =
-    ev
-      .slice(0, 80)
-      .map(e =>
-        `<div class="event">
-          <time>
-            ${new Date(e.at).toLocaleTimeString("ru-RU")}
-          </time>
-
-          <b>${e.name}</b>
-          ${e.text}
-
-        </div>`
-      )
+    (state.events || [])
+      .map(e => `
+        <div class="event">
+          <b>${e.workerName || ""}</b>
+          <span>${e.text || ""}</span>
+          <small>${e.createdAt ? new Date(e.createdAt).toLocaleString() : ""}</small>
+        </div>
+      `)
       .join("");
 }
 
 
 /* =========================
-   CLOCK
+   RENDER
 ========================= */
 
-setInterval(() => {
+function render() {
+  if (!me || !state) return;
 
-  if ($("#clock")) {
+  if (me.role === "admin") {
+    renderAdmin();
+  } else {
+    renderWorker();
+  }
+}
 
-    $("#clock").textContent =
-      new Date().toLocaleTimeString("ru-RU");
+
+/* =========================
+   WORKER BUTTONS
+========================= */
+
+$("#mealBtn").onclick = () => action("/worker/meal");
+
+$("#backBtn").onclick = () => action("/worker/back");
+
+$("#restStart").onclick = () => action("/worker/rest-start");
+
+$("#restPause").onclick = () => action("/worker/rest-pause");
+
+$("#endShift").onclick = async () => {
+  if (!confirm("Завершить смену?")) return;
+
+  try {
+    state = await api("/worker/end", {
+      method: "POST"
+    });
+
+    stopScreenShare();
+
+    render();
+
+    toast("Смена завершена");
+  } catch (e) {
+    toast(e.message);
+  }
+};
+
+
+/* =========================
+   ADMIN BUTTONS
+========================= */
+
+$("#sendNotify").onclick = async () => {
+  const worker = $("#notifyWorker").value;
+  const message = $("#notifyText").value.trim();
+
+  if (!message) {
+    toast("Введите сообщение");
+    return;
   }
 
-  if (me) {
-    refresh();
+  try {
+    state = await api("/admin/notify", {
+      method: "POST",
+      body: JSON.stringify({
+        worker,
+        message
+      })
+    });
+
+    $("#notifyText").value = "";
+
+    render();
+
+    toast("Уведомление отправлено");
+  } catch (e) {
+    toast(e.message);
+  }
+};
+
+
+/* =========================
+   ADMIN SHIFT SETTINGS
+========================= */
+
+$("#saveShiftHours").onclick = async () => {
+  const hours = Number($("#shiftHours").value);
+
+  if (!hours || hours <= 0) {
+    toast("Укажите правильное время смены");
+    return;
   }
 
-}, 1000);
+  try {
+    state = await api("/admin/settings", {
+      method: "POST",
+      body: JSON.stringify({
+        shiftHours: hours
+      })
+    });
+
+    render();
+
+    toast("Настройки сохранены");
+  } catch (e) {
+    toast(e.message);
+  }
+};
+
+
+/* =========================
+   ADMIN RESET WORKER
+========================= */
+
+$$(".resetWorker").forEach(btn => {
+  btn.onclick = async () => {
+    const workerId = Number(btn.dataset.worker);
+
+    if (!confirm("Сбросить смену этого работника?")) {
+      return;
+    }
+
+    try {
+      state = await api("/admin/reset-worker", {
+        method: "POST",
+        body: JSON.stringify({
+          workerId
+        })
+      });
+
+      render();
+
+      toast("Смена работника сброшена");
+    } catch (e) {
+      toast(e.message);
+    }
+  };
+});
+
+
+/* =========================
+   INITIAL LOAD
+========================= */
+
+async function init() {
+  try {
+    const d = await api("/worker/state");
+
+    if (d.user) {
+      me = d.user;
+      state = d.state;
+
+      $("#loginPage").classList.add("hidden");
+      $("#app").classList.remove("hidden");
+
+      render();
+    }
+  } catch (e) {
+    console.log("Пользователь не авторизован");
+  }
+}
+
+init();
+
+
+/* =========================
+   AUTO REFRESH
+========================= */
+
+setInterval(async () => {
+  if (!me) return;
+
+  try {
+    const d = await api("/worker/state");
+
+    state = d.state;
+
+    render();
+  } catch (e) {
+    console.error(e);
+  }
+}, 5000);
