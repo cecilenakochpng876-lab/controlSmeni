@@ -288,7 +288,8 @@ $("#loginForm").onsubmit = async e => {
    LOGOUT
 ========================= */
 
-$("#logout").onclick = async () => {
+document.querySelectorAll(".logout").forEach(btn => {
+  btn.onclick = async () => {
   try {
     await api("/logout", {
       method: "POST"
