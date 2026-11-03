@@ -300,13 +300,13 @@ document.querySelectorAll(".logout").forEach(btn => {
 
   stopScreenShare();
 
-  me = null;
+    me = null;
   state = null;
 
   $("#app").classList.add("hidden");
   $("#loginPage").classList.remove("hidden");
-};
-
+  };
+});
 
 /* =========================
    ACTION
@@ -634,9 +634,10 @@ async function init() {
       me = d.user;
       state = d.state;
 
-      $("#loginPage").classList.add("hidden");
-      $("#app").classList.remove("hidden");
-
+        $("#app").classList.add("hidden");
+  $("#loginPage").classList.remove("hidden");
+  };
+});
       render();
     }
   } catch (e) {
