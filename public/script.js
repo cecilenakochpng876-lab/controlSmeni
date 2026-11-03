@@ -634,10 +634,9 @@ async function init() {
       me = d.user;
       state = d.state;
 
-        $("#app").classList.add("hidden");
-  $("#loginPage").classList.remove("hidden");
-  };
-});
+      $("#loginPage").classList.add("hidden");
+      $("#app").classList.remove("hidden");
+
       render();
     }
   } catch (e) {
